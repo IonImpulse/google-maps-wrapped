@@ -5,7 +5,7 @@ let globe;
 function initGlobe() {
     // Create a new Globe instance
     globe = new Globe(document.getElementById('globe-viz'))
-        .globeImageUrl('/assets/8081_earthmap10k.jpg')
+        .globeImageUrl('assets/8081_earthmap10k.jpg')
         .arcsData([])
         .arcColor('color')
         .arcStroke(0.5)
