@@ -1,3 +1,46 @@
+const typeColors = {
+    'FLYING': '#3791bb',
+    'IN_BUS': '#b4b648',
+    'IN_FERRY': '#393A9C',
+    'IN_PASSENGER_VEHICLE': '#aa3d3d',
+    'IN_SUBWAY': '#b19036',
+    'IN_TRAIN': '#dd9613',
+    'IN_TRAM': '#93c23d',
+    'CYCLING': '#4eb145',
+    'MOTORCYCLING': '#d86a6a',
+    'RUNNING': '#9e48a1',
+    'WALKING': '#b1457b',
+    'UNKNOWN_ACTIVITY_TYPE': 'grey'
+};
+// Map trip types to Google Material Icons
+const typeIcons = {
+    'FLYING': 'flight',
+    'IN_BUS': 'directions_bus',
+    'IN_FERRY': 'directions_boat',
+    'IN_PASSENGER_VEHICLE': 'drive_eta',
+    'IN_SUBWAY': 'subway',
+    'IN_TRAIN': 'train',
+    'IN_TRAM': 'tram',
+    'CYCLING': 'directions_bike',
+    'MOTORCYCLING': 'two_wheeler',
+    'RUNNING': 'directions_run',
+    'WALKING': 'directions_walk',
+    'UNKNOWN_ACTIVITY_TYPE': 'help_outline'
+};
+const typeToReadable = {
+    'FLYING': 'Airplane',
+    'IN_BUS': 'Bus',
+    'IN_FERRY': 'Ferry',
+    'IN_PASSENGER_VEHICLE': 'Car',
+    'IN_SUBWAY': 'Subway',
+    'IN_TRAIN': 'Train',
+    'IN_TRAM': 'Tram',
+    'CYCLING': 'Cycling',
+    'MOTORCYCLING': 'Motorcycle',
+    'RUNNING': 'Running',
+    'WALKING': 'Walking',
+    'UNKNOWN_ACTIVITY_TYPE': 'Unknown'
+}
 
 let globe;
 
@@ -8,7 +51,7 @@ function initGlobe() {
         .globeImageUrl('assets/8081_earthmap10k.jpg')
         .arcsData([])
         .arcColor('color')
-        .arcStroke(0.5)
+        .arcStroke(null)
         .arcDashLength(1) // Full length for solid line
         .arcDashGap(0) // No gap
         .arcDashAnimateTime(0) // No animation by default
@@ -63,49 +106,7 @@ async function showTrips() {
     console.log('Fetched trips:', trips);
     // Process trips data for globe.gl
     const arcsData = [];
-    const typeColors = {
-        'FLYING': 'pink',
-        'IN_BUS': 'yellow',
-        'IN_FERRY': 'blue',
-        'IN_PASSENGER_VEHICLE': 'green',
-        'IN_SUBWAY': 'purple',
-        'IN_TRAIN': 'orange',
-        'IN_TRAM': 'cyan',
-        'CYCLING': 'lime',
-        'MOTORCYCLING': 'red',
-        'RUNNING': 'magenta',
-        'WALKING': 'white',
-        'UNKNOWN_ACTIVITY_TYPE': 'grey'
-    };
-    // Map trip types to Google Material Icons
-    const typeIcons = {
-        'FLYING': 'flight',
-        'IN_BUS': 'directions_bus',
-        'IN_FERRY': 'directions_boat',
-        'IN_PASSENGER_VEHICLE': 'drive_eta',
-        'IN_SUBWAY': 'subway',
-        'IN_TRAIN': 'train',
-        'IN_TRAM': 'tram',
-        'CYCLING': 'directions_bike',
-        'MOTORCYCLING': 'two_wheeler',
-        'RUNNING': 'directions_run',
-        'WALKING': 'directions_walk',
-        'UNKNOWN_ACTIVITY_TYPE': 'help_outline'
-    };
-    const typeToReadable = {
-        'FLYING': 'Airplane',
-        'IN_BUS': 'Bus',
-        'IN_FERRY': 'Ferry',
-        'IN_PASSENGER_VEHICLE': 'Car',
-        'IN_SUBWAY': 'Subway',
-        'IN_TRAIN': 'Train',
-        'IN_TRAM': 'Tram',
-        'CYCLING': 'Cycling',
-        'MOTORCYCLING': 'Motorcycle',
-        'RUNNING': 'Running',
-        'WALKING': 'Walking',
-        'UNKNOWN_ACTIVITY_TYPE': 'Unknown'
-    }
+
     // Sort trips by startTime
     trips.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
     // Only include trips from the most recent year
@@ -140,6 +141,7 @@ async function showTrips() {
                         endTime: new Date(trip.endTime),
                         startCity: trip.startCity,
                         endCity: trip.endCity,
+                        distanceMeters: trip.activity.distanceMeters
                     });
                 } else {
                     console.warn('Invalid coordinates in trip:', trip);
@@ -168,6 +170,8 @@ async function showTrips() {
 
     // Setup for animations
     let index = 0;
+    let tripStats = {};
+
     // Main animation loop
     async function addNextTrip() {
         if (index < arcsData.length) {
@@ -176,12 +180,7 @@ async function showTrips() {
             const iconName = typeIcons[currentTrip.type] || 'help_outline';
             const typeName = typeToReadable[currentTrip.type] || 'Unknown';
             const totalTimeMS = currentTrip.endTime - currentTrip.startTime;
-            const distanceMeters = calculateDistance(
-                currentTrip.startLat,
-                currentTrip.startLng,
-                currentTrip.endLat,
-                currentTrip.endLng
-            );
+            const distanceMeters = currentTrip.distanceMeters;
             const distanceMiles = distanceMeters * 0.0006213712;
 
             // Fetch city names using world_cities.json data
@@ -190,6 +189,20 @@ async function showTrips() {
 
             // Update the trip info div
             updateTripInfo(iconName, typeName, totalTimeMS, distanceMiles, startCity, endCity);
+
+            // Update trip stats
+            if (tripStats[currentTrip.type]) {
+                tripStats[currentTrip.type].count++;
+                tripStats[currentTrip.type].totalDistanceMeters += distanceMeters;
+                tripStats[currentTrip.type].totalTimeMS += totalTimeMS;
+            } else {
+                tripStats[currentTrip.type] = {
+                    count: 1,
+                    totalDistanceMeters: distanceMeters,
+                    totalTimeMS: totalTimeMS
+                };
+            }
+            updateTripStats(tripStats);
 
             // Update the camera to focus on the current trip
             const { startLat, startLng, endLat, endLng, type } = currentTrip;
@@ -216,7 +229,7 @@ async function showTrips() {
                 ...currentTrip,
                 dashLength: 1, // Full length
                 dashGap: 0, // No gap
-                dashAnimateTime: 0 ,// No animation
+                dashAnimateTime: 0,// No animation
             };
             // Add the next trip to the arcs data
             globe.arcsData([...globe.arcsData(), animatedArc]);
@@ -233,8 +246,8 @@ async function showTrips() {
 
                 // Update the globe with new city icons
                 globe.htmlElementsData([...cityIcons]);
-            } 
-            
+            }
+
             if (!visitedCities.has(currentTrip.endCity)) {
                 visitedCities.add(currentTrip.endCity);
 
@@ -277,6 +290,30 @@ function updateTripInfo(iconName, type, totalTimeMS, distanceMiles, startCity, e
             <div>${startCity} &rarr; ${endCity}</div>
         </div>
     `;
+}
+
+function updateTripStats(tripStats) {
+    const tripStatsDiv = document.getElementById('trip-stats');
+
+    let statsHTML = '';
+    // Sort the trip stats by count
+    const sortedStats = Object.entries(tripStats).sort((a, b) => b[1].count - a[1].count);
+    for (const [type, stats] of sortedStats) {
+        const { count, totalDistanceMeters, totalTimeMS } = stats;
+        const totalHours = totalTimeMS / 1000 / 3600;
+        const avgSpeed = totalDistanceMeters * 0.0006213712 / totalHours;
+        statsHTML += `
+            <div class="stat">
+                <i class="material-icons" style="color: ${typeColors[type]}">${typeIcons[type]}</i>
+                ${count} trips,
+                ${(totalDistanceMeters * 0.0006213712).toFixed(1)} miles,
+                ${totalHours.toFixed(1)} hours,
+                ${avgSpeed.toFixed(1)} mph
+            </div>
+        `;
+    }
+
+    tripStatsDiv.innerHTML = statsHTML;
 }
 
 // Function to calculate distance between two coordinates in meters
@@ -323,7 +360,7 @@ function calculateFitAltitude(lat1, lng1, lat2, lng2, type) {
         // For non-flying trips, zoom in more (i.e., lower altitude)
         minAltitude = 0.1; // Closer zoom for short trips
         maxAltitude = 1.5; // Farther zoom for long trips
-        scaleFactor = 40.0; // Increase scaleFactor to zoom more
+        scaleFactor = 70.0; // Increase scaleFactor to zoom more
     }
     // Calculate altitude based on angular distance
     let altitude = Math.min(Math.max(angularDistanceInRadians * scaleFactor, minAltitude), maxAltitude);
@@ -354,7 +391,7 @@ function calculateTransitionDuration(index, arcsData, midLat, midLng) {
         const angleDist = angularDistance(prevMidLat, prevMidLng, midLat, midLng);
         // Adjust duration based on angular distance
         console.log(`Angular distance: ${angleDist.toFixed(4)} radians`);
-        transitionDuration = Math.min(Math.max(angleDist * 150, 400), 900);
+        transitionDuration = Math.min(Math.max(angleDist * 150, 700), 1300);
         console.log(`Calculated transition duration: ${transitionDuration} ms`);
     }
     return transitionDuration;

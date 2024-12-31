@@ -1,7 +1,7 @@
 let cityData = []; // Array to hold city data
 
 // Load city data from assets/world_cities.json
-fetch('assets/world_cities.json')
+fetch('assets/cities.json')
   .then(response => response.json())
   .then(data => {
     cityData = data;
@@ -111,13 +111,13 @@ async function dataToIndexedDB(data) {
     await store.clear();
     const uniqueModesOfTransport = {};
 
+    const allSegments = [];
     for (const segment of segments) {
         // Print after every 1000 segments
-        if (segments.indexOf(segment) % 1000 === 0) {
-            console.log(`Adding segment ${segments.indexOf(segment)}/${segments.length}`);
+        if (segments.indexOf(segment) % 100 === 0) {
             // Put the percentage in the trip-info div
             const cleanPercentage = Math.floor((segments.indexOf(segment) / segments.length) * 100);
-            document.getElementById("trip-info").innerHTML = `Adding segment ${segments.indexOf(segment)}/${segments.length} (${cleanPercentage}%)`;
+            document.getElementById("trip-info").innerHTML = `Importing data... (${cleanPercentage}%)`;
         }
         await store.add(segment);
 
@@ -186,17 +186,30 @@ const defaultConfig = {
     }
 }
 
+function formatPopulation(population) {
+    if (population > 1000000) {
+        return `${(population / 1000000).toFixed(1)}M`;
+    } else if (population > 1000) {
+        return `${(population / 1000).toFixed(1)}K`;
+    } else {
+        return population;
+    }
+}
+
 // Function to fetch city name from local city data
 function getCityName(lat, lon) {
     // Find the nearest city within a reasonable distance
     const maxDistanceKm = 50; // Maximum distance to consider (in km)
+    const minPopulation = 50000;
+
     let nearestCity = null;
-    let minDistance = Infinity;
+    let bestScore = 0;
+
     const latRad = lat * Math.PI / 180;
     const lonRad = lon * Math.PI / 180;
     for (const city of cityData) {
         const cityLat = parseFloat(city.lat);
-        const cityLon = parseFloat(city.lng);
+        const cityLon = parseFloat(city.lon);
         const cityLatRad = cityLat * Math.PI / 180;
         const cityLonRad = cityLon * Math.PI / 180;
         const deltaLat = cityLatRad - latRad;
@@ -204,14 +217,21 @@ function getCityName(lat, lon) {
         const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(latRad) * Math.cos(cityLatRad) * Math.sin(deltaLon / 2) ** 2;
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         const distanceKm = c * 6371; // Distance in kilometers
-        if (distanceKm < minDistance) {
-            minDistance = distanceKm;
+
+        if (distanceKm > maxDistanceKm || city.population < minPopulation) {
+            continue;
+        }
+
+        // We want to maximize the population and minimize the distance
+        const score = city.population / Math.max(1, distanceKm);
+        if (score >= bestScore) {
             nearestCity = city;
+            bestScore = score;
         }
     }
 
-    if (nearestCity && minDistance <= maxDistanceKm) {
-        return nearestCity.name;
+    if (nearestCity) {
+        return `${nearestCity.name} (${formatPopulation(nearestCity.population)})`;
     } else {
         return 'Unknown Location';
     }
